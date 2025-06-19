@@ -1,0 +1,94 @@
+stages:
+  - validate
+  - plan
+  - apply
+
+variables:
+  TF_VERSION: "1.4.0"
+  TG_VERSION: "0.48.0"
+  AWS_DEFAULT_REGION: "us-east-1"
+
+before_script:
+  - apk add --no-cache curl unzip git
+  - curl -Lo terraform.zip https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+  - unzip -o terraform.zip -d /usr/local/bin/
+  - mv /usr/local/bin/terraform /usr/local/bin/terraform_bin
+  - chmod +x /usr/local/bin/terraform_bin
+  - ln -s /usr/local/bin/terraform_bin/terraform /usr/local/bin/terraform
+  - curl -Lo /usr/local/bin/terragrunt https://github.com/gruntwork-io/terragrunt/releases/download/v${TG_VERSION}/terragrunt_linux_amd64
+  - chmod +x /usr/local/bin/terragrunt
+  - terraform version
+  - terragrunt --version
+
+validate:
+  stage: validate
+  script:
+    - cd dms-terraform/environments/dev && terragrunt validate
+    - cd ../production && terragrunt validate
+
+plan:dev:
+  stage: plan
+  script:
+    - cd dms-terraform/environments/dev
+    - terragrunt plan-all
+  only:
+    - merge_requests
+    - main
+    - dev
+
+plan:prod:
+  stage: plan
+  script:
+    - cd dms-terraform/environments/production
+    - terragrunt plan-all
+  only:
+    - main
+    - tags
+
+apply:dev:
+  stage: apply
+  script:
+    - cd dms-terraform/environments/dev
+    - terragrunt apply-all --terragrunt-non-interactive --auto-approve
+  environment:
+    name: dev
+  only:
+    - main
+  when: manual
+
+apply:prod:
+  stage: apply
+  script:
+    - cd dms-terraform/environments/production
+    - terragrunt apply-all --terragrunt-non-interactive --auto-approve
+  environment:
+    name: production
+  only:
+    - main
+    - tags
+  when: manual
+
+notify:dev:
+  stage: apply
+  script:
+    - |
+      curl -X POST -H 'Content-type: application/json' \
+        --data '{"text":"✅ *Dev deployment succeeded!*"}' \
+        $SLACK_WEBHOOK_URL
+  needs: ["apply:dev"]
+  when: on_success
+  only:
+    - main
+
+notify:prod:
+  stage: apply
+  script:
+    - |
+      curl -X POST -H 'Content-type: application/json' \
+        --data '{"text":"✅ *Production deployment succeeded!*"}' \
+        $SLACK_WEBHOOK_URL
+  needs: ["apply:prod"]
+  when: on_success
+  only:
+    - main
+    - tags 
