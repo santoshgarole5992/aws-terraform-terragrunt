@@ -38,11 +38,11 @@ generate "backend" {
   contents  = <<EOF
 terraform {
   backend "s3" {
-    bucket         = "convera-terragrunt-sf-nonprod"
+    bucket         = "terragrunt-sf-nonprod"
     key            = "dms/${path_relative_to_include()}/terraform.tfstate"
     region         = "${local.aws_region}"
     encrypt        = true
-    dynamodb_table = "convera-data-test-locking-table"
+    dynamodb_table = "terragrunt-sf-locking-table"
   }
 }
 EOF
